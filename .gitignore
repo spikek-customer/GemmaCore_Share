@@ -1,0 +1,50 @@
+# Operating System Files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Python & Virtual Environments
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+litert-env
+litert-env/
+venv/
+env/
+.venv/
+
+# AI Agent Configs & Internal Metadata (Requirement 3: Prevent leaking internal dev know-how)
+.agents
+docs/AUTONOMY.md
+docs/TRACEABILITY.md
+docs/TEST_RESULTS.md
+docs/APPROVALS.md
+
+# Large Model Binaries
+models/*.litertlm
+
+# Database & Runtime Local Data (Requirement 4: Delete dummy knowledge/logs/DBs)
+scratch/*.db
+scratch/*.json
+scratch/sandbox/
+:memory:/
+
+# Sensitive Configs & Credentials (Requirement 2: API Keys & Secrets Protection)
+.env
+.env.local
+.env.*
+!.env.example
+
+# Logs & Audit Dumps
+*.log
+logs/
+.coverage
+htmlcov/
+
+# Third-party Dependencies
+third_party/
+
+# IDE & Editor Settings
+.vscode/
+.idea/

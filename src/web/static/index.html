@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>社内AIナレッジポータル (GemmaCore & Gemini v3.2 Enterprise)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- =============================================================
+       0. Strict Authentication Gate (Full-screen for unauthenticated users)
+       ============================================================= -->
+  <div id="auth-gate" class="auth-gate-screen">
+    <div class="auth-gate-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div class="auth-logo-box" style="margin: 0;">💎</div>
+        <select class="lang-select" onchange="i18n.setLanguage(this.value)" title="Language / 言語 / 語言">
+          <option value="ja">🌐 日本語</option>
+          <option value="en">🌐 English</option>
+          <option value="zh-TW">🌐 繁體中文</option>
+        </select>
+      </div>
+      <h2 class="auth-title" data-i18n="gate_title">社内AIナレッジポータル</h2>
+      <p class="auth-subtitle" data-i18n="gate_subtitle">LiteRT-LM ＆ Google Gemini ハイブリッド知識基盤</p>
+      <div class="auth-security-badge" data-i18n="gate_badge">🔒 ゼロトラスト企業認証ゲートウェイ (v4.2)</div>
+
+      <!-- Google Workspace Single Sign-On Button -->
+      <div style="margin: 18px 0 16px;">
+        <button type="button" id="btn-google-sso" class="btn btn-google btn-block" onclick="openGoogleSSOModal()">
+          <svg viewBox="0 0 24 24" width="18" height="18" style="vertical-align: middle; margin-right: 8px;">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span data-i18n="btn_google_sso">Google Workspace アカウントでログイン</span>
+        </button>
+        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px;" data-i18n="google_sso_sub">
+          ※社内Workspaceドメイン（@company.com等）のGoogleアカウントでワンクリック認証
+        </div>
+      </div>
+
+      <div class="auth-divider">
+        <span data-i18n="gate_divider">または 社内ID/パスワードでログイン</span>
+      </div>
+
+      <form id="gate-login-form" onsubmit="handleGateLogin(event)">
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="gate-username" data-i18n="lbl_user_id">社員ユーザーID</label>
+          <input type="text" id="gate-username" class="form-input" placeholder="例: admin_user または yamada_t" data-i18n-placeholder="ph_user_id" required autocomplete="username">
+        </div>
+        <div class="form-group" style="text-align: left;">
+          <label class="form-label" for="gate-password" data-i18n="lbl_password">パスワード</label>
+          <input type="password" id="gate-password" class="form-input" placeholder="パスワードを入力" data-i18n-placeholder="ph_password" required autocomplete="current-password">
+        </div>
+
+        <button type="submit" id="btn-gate-login" class="btn btn-primary btn-block">
+          <span data-i18n="btn_login">安全にログイン</span> 🚀
+        </button>
+      </form>
+
+      <!-- Demo Accounts Quick Fill Guide -->
+      <div class="demo-accounts-box">
+        <div class="demo-title" data-i18n="demo_accounts_title">💡 評価用アカウント一覧 (初期パスワード: password123):</div>
+        <div class="demo-chips">
+          <button class="chip" onclick="quickFillGate('admin_user', 'password123')" data-i18n="demo_admin">👑 最高管理者 (admin_user)</button>
+          <button class="chip" onclick="quickFillGate('editor_user', 'password123')" data-i18n="demo_editor">✏️ ナレッジ編集長 (editor_user)</button>
+          <button class="chip" onclick="quickFillGate('viewer_user', 'password123')" data-i18n="demo_viewer">👤 一般閲覧社員 (viewer_user)</button>
+        </div>
+      </div>
+
+      <div class="auth-notice" data-i18n="gate_notice">
+        ※ログインしていない状態では、社内データおよび機能画面は一切開示されません（Strict Auth Guard）。
+      </div>
+    </div>
+  </div>
+
+  <!-- =============================================================
+       Main Application Root (Hidden until authenticated)
+       ============================================================= -->
+  <div id="app-root" style="display: none;">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="logo-icon">💎</div>
+        <div>
+          <h1 class="header-title" data-i18n="app_title">社内AIナレッジポータル</h1>
+          <p class="header-subtitle" data-i18n="app_subtitle">LiteRT-LM & Google Gemini ハイブリッド知識基盤 (v4.2 Enterprise)</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <!-- Language Selector -->
+        <div class="lang-selector-wrap">
+          <select id="lang-selector" class="lang-select" onchange="i18n.setLanguage(this.value)" title="Language / 言語 / 語言">
+            <option value="ja">🌐 日本語</option>
+            <option value="en">🌐 English</option>
+            <option value="zh-TW">🌐 繁體中文</option>
+          </select>
+        </div>
+
+        <!-- Active User Badge -->
+        <div class="user-selector-box">
+          <span data-i18n="logged_in_as">👤 ログイン中:</span>
+          <strong id="header-user-name">読み込み中...</strong>
+          <span id="user-role-badge" class="user-role-badge role-admin" data-i18n="role_admin">管理者</span>
+          <button class="btn btn-xs btn-outline btn-logout" onclick="logout()" title="ログアウトして画面をロック" data-i18n="btn_logout">🚪 ログアウト</button>
+        </div>
+
+        <!-- Active Model Status Badge -->
+        <div id="active-badge" class="model-badge badge-local">
+          <span class="badge-dot"></span>
+          <span id="badge-text">ローカル推論 (LiteRT-LM)</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs (With RBAC lock state) -->
+    <nav class="app-nav">
+      <button class="nav-tab active" data-tab="tab-chat" id="nav-chat">
+        <span class="tab-icon">💬</span>
+        <span class="tab-label" data-i18n="tab_chat">社内チャット</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-upload" id="nav-upload">
+        <span class="tab-icon">📁</span>
+        <span class="tab-label" data-i18n="tab_upload">資料ファイル一括登録</span>
+        <span class="lock-tag" id="lock-upload" style="display:none;" data-i18n="lock_editor">🔒 要編集権限</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-cms" id="nav-cms">
+        <span class="tab-icon">✏️</span>
+        <span class="tab-label" data-i18n="tab_cms">ナレッジ文面編集</span>
+        <span class="lock-tag" id="lock-cms" style="display:none;" data-i18n="lock_editor">🔒 要編集権限</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-simulator" id="nav-simulator">
+        <span class="tab-icon">🔍</span>
+        <span class="tab-label" data-i18n="tab_simulator">検索シミュレーター</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-users" id="nav-users">
+        <span class="tab-icon">👥</span>
+        <span class="tab-label" data-i18n="tab_users">ユーザー・権限管理</span>
+        <span class="lock-tag" id="lock-users" style="display:none;" data-i18n="lock_admin">🔒 要管理者</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-audit" id="nav-audit">
+        <span class="tab-icon">📜</span>
+        <span class="tab-label" data-i18n="tab_audit">操作監査ログ</span>
+        <span class="lock-tag" id="lock-audit" style="display:none;" data-i18n="lock_admin">🔒 要管理者</span>
+      </button>
+      <button class="nav-tab" data-tab="tab-settings" id="nav-settings">
+        <span class="tab-icon">⚙️</span>
+        <span class="tab-label" data-i18n="tab_settings">モデル・保守設定</span>
+        <span class="lock-tag" id="lock-settings" style="display:none;" data-i18n="lock_admin">🔒 要管理者</span>
+      </button>
+    </nav>
+
+    <!-- Main Container -->
+    <main class="app-main">
+
+      <!-- 1. Chat Tab (ChatGPT-like Multi-thread Sidebar + Chat Area) -->
+      <section id="tab-chat" class="tab-content active">
+        <div class="chat-layout">
+          <!-- Thread History Sidebar Backdrop for Mobile -->
+          <div id="chat-sidebar-backdrop" class="chat-sidebar-backdrop" onclick="toggleChatSidebar()"></div>
+
+          <!-- Thread History Sidebar -->
+          <aside class="chat-sidebar">
+            <div class="sidebar-header" style="display: flex; gap: 8px; align-items: center;">
+              <button class="btn btn-new-chat" onclick="createNewThread()" style="flex: 1;">
+                <span data-i18n="btn_new_chat">＋ 新しいチャット</span>
+              </button>
+              <button type="button" class="btn btn-outline btn-xs mobile-only" onclick="toggleChatSidebar()" title="履歴メニューを閉じる" style="padding: 6px 10px; font-size: 13px; font-weight: bold; border-color: var(--border);">✕</button>
+            </div>
+            <div class="sidebar-threads-header">
+              <span data-i18n="history_header">過去の会話履歴</span>
+              <button class="btn-icon-refresh" onclick="loadThreads()" title="履歴更新">🔄</button>
+            </div>
+            <div id="thread-list" class="thread-list">
+              <!-- Loaded dynamically -->
+              <div class="thread-empty">履歴を読み込み中...</div>
+            </div>
+            <div class="sidebar-footer" style="padding: 10px 12px; border-top: 1px solid var(--border); margin-top: auto;">
+              <button class="btn btn-xs btn-danger-outline" style="width: 100%; justify-content: center;" onclick="clearAllChatHistory()" title="すべてのチャット履歴を消去">
+                <span data-i18n="btn_clear_all">🗑️ 全ての会話履歴を削除</span>
+              </button>
+            </div>
+          </aside>
+
+          <!-- Chat Main Area -->
+          <div class="chat-main-area">
+            <div class="chat-thread-title-bar">
+              <button type="button" class="btn btn-xs btn-outline btn-toggle-sidebar mobile-only" onclick="toggleChatSidebar()" title="会話履歴メニューを開閉">
+                📜 <span data-i18n="btn_history_list">履歴一覧</span>
+              </button>
+              <span class="thread-title-icon">💬</span>
+              <span id="active-thread-title" class="active-thread-title">新しいチャット</span>
+              <button class="btn btn-xs btn-danger-outline" id="btn-delete-current-thread" onclick="deleteCurrentThread()" title="現在のチャットを削除">🗑️ <span class="hide-mobile" data-i18n="btn_delete_chat">この会話を削除</span></button>
+            </div>
+
+            <div id="chat-messages" class="chat-messages">
+              <div class="chat-bubble assistant-bubble">
+                <div class="bubble-header">🤖 社内AIアシスタント</div>
+                <div class="bubble-text" data-i18n-html="assistant_welcome">
+                  こんにちは！社内規程、就業規則、経費精算、ガイドラインなどについて、何でもお気軽にご質問ください。<br>
+                  登録された全社内ドキュメント（Office、PDF、マニュアル等）に基づいて正確にお答えします。（※厳選出典リンク付き）
+                </div>
+              </div>
+            </div>
+
+            <div class="quick-chips">
+              <span class="chip-label" data-i18n="quick_chips_label">よくある質問例:</span>
+              <button class="chip" onclick="fillPrompt('通勤手当の上限額はいくらですか？')" data-i18n="chip_1">通勤手当の上限額は？</button>
+              <button class="chip" onclick="fillPrompt('在宅リモートワークの利用条件を教えてください。')" data-i18n="chip_2">リモートワークの条件は？</button>
+              <button class="chip" onclick="fillPrompt('業務でのAIツールの利用基準はどうなっていますか？')" data-i18n="chip_3">AIツールの利用基準は？</button>
+              <button class="chip" onclick="fillPrompt('台湾の総理大臣は誰ですか？')" data-i18n="chip_4">台湾の総理大臣は？</button>
+            </div>
+
+            <div class="chat-input-bar">
+              <textarea id="chat-input" placeholder="質問を入力してください... (Shift+Enterで改行, Enterで送信)" data-i18n-placeholder="chat_placeholder" rows="2"></textarea>
+              <button id="btn-send" class="btn btn-primary" onclick="sendChat()">
+                <span data-i18n="btn_send">送信</span> 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. Universal File Upload & Google Drive Sync Tab (Editor / Admin) -->
+      <section id="tab-upload" class="tab-content">
+        <!-- Google Drive Incremental Synchronization Dashboard -->
+        <div class="card" style="margin-bottom: 24px; border-left: 4px solid #4285F4;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h2 class="card-title" style="display: flex; align-items: center; gap: 8px;">
+                <span>☁️ Google Drive 常時ナレッジ自動同期</span>
+                <span class="user-role-badge" style="background:#e8f0fe; color:#1a73e8; border:1px solid #cce0ff;">Changes API 差分検知</span>
+              </h2>
+              <p class="card-desc" style="margin-bottom: 0;">
+                社内Google Drive上のドキュメント（Docs）、スプレッドシート（Sheets）、スライド（Slides）、PDF等を常時監視し、更新・新規・削除を自動検知してAI知識を最新化します。手動での2重作業や転記ミスを根絶します。
+              </p>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-primary" id="btn-sync-drive" onclick="triggerDriveSync()">
+                <span>🔄 今すぐDriveと同期 (Sync Now)</span>
+              </button>
+              <button class="btn btn-secondary" id="btn-drive-folder-settings" onclick="openDriveFolderModal()">
+                <span>⚙️ 同期対象フォルダ設定</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Drive Sync Stats Summary Cards -->
+          <div class="stats-grid" style="margin-top: 18px; margin-bottom: 8px;">
+            <div class="stat-card">
+              <div class="stat-label">同期ステータス</div>
+              <div class="stat-value" id="drive-stat-status" style="font-size: 16px;">
+                <span class="badge-dot badge-dot-active"></span> 待機中 (IDLE)
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">最終同期日時</div>
+              <div class="stat-value" id="drive-stat-last-time" style="font-size: 15px; color: var(--text-main);">--</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">同期済みファイル数</div>
+              <div class="stat-value" id="drive-stat-files">0 <span style="font-size:13px;font-weight:normal;">件</span></div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">生成ナレッジブロック数</div>
+              <div class="stat-value" id="drive-stat-blocks">0 <span style="font-size:13px;font-weight:normal;">ブロック</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2 class="card-title">📁 社内ドキュメントのマルチフォーマット一括登録（手動アップロード）</h2>
+          <p class="card-desc">
+            Office全般（Word・Excel・PowerPoint）、PDF、テキストファイルをそのままドラッグ＆ドロップで登録できます。文書構造を自動認識し、「文境界優先チャンキング」により最適な知識ブロックへ分割・インデックス化されます。
+          </p>
+
+          <!-- Supported formats badges -->
+          <div class="format-badges">
+            <span class="format-badge">📄 PDF (.pdf)</span>
+            <span class="format-badge">📝 Word (.docx)</span>
+            <span class="format-badge">📊 Excel (.xlsx)</span>
+            <span class="format-badge">📽️ PowerPoint (.pptx)</span>
+            <span class="format-badge">📃 テキスト/CSV (.txt, .md, .csv)</span>
+          </div>
+
+          <div class="upload-dropzone" id="dropzone">
+            <div class="dropzone-icon">📥</div>
+            <p class="dropzone-text">あらゆる書類ファイルを選択またはドラッグ＆ドロップしてください</p>
+            <input type="file" id="file-input" accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.tsv" style="display:none;" onchange="handleFileSelect(event)">
+            <button class="btn btn-secondary" onclick="document.getElementById('file-input').click()">ファイルを選択</button>
+            <p class="dropzone-hint" id="selected-file-label">未選択</p>
+          </div>
+
+          <div style="margin-top: 20px; display: flex; gap: 12px;">
+            <button class="btn btn-primary" id="btn-upload-file" onclick="uploadSelectedFile()" disabled>
+              <span>このファイルを解析して知識ベースへ登録</span> 🚀
+            </button>
+            <button class="btn btn-secondary" onclick="clearSelectedFile()">クリア</button>
+          </div>
+
+          <!-- Transparency Report Container -->
+          <div id="upload-report-area" style="display:none; margin-top: 28px;">
+            <div class="divider" style="margin-bottom: 20px; border-top: 1px solid var(--border);"></div>
+            <h3 class="sub-title">📊 ドキュメント解析 & インデックス完了レポート</h3>
+            <div id="report-summary-box" class="report-summary-box">
+              <!-- Rendered dynamically -->
+            </div>
+            <h4 style="font-size:14px;font-weight:700;margin: 16px 0 8px;">生成された知識ブロック一覧（プレビュー）:</h4>
+            <div id="report-blocks-list" class="blocks-container">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Knowledge CMS Tab (Editor / Admin) -->
+      <section id="tab-cms" class="tab-content">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <h2 class="card-title">✏️ ナレッジ文面ブロック編集 (CMS)</h2>
+              <p class="card-desc">
+                ファイル全体を再登録することなく、特定の条文や文章ブロックをブラウザ上で直接修正・削除できます。保存すると即座に再ベクトル化され、チャット回答にミリ秒単位で反映されます。
+              </p>
+            </div>
+            <button class="btn btn-success" onclick="openNewBlockModal()">
+              <span>＋ 新しい文面を追加</span>
+            </button>
+          </div>
+
+          <div class="filter-bar">
+            <input type="text" id="cms-search-input" class="form-input" placeholder="文面やタイトルで検索して絞り込み..." oninput="filterBlocks()">
+            <button class="btn btn-secondary" onclick="loadBlocks()">更新 🔄</button>
+          </div>
+
+          <div id="blocks-container" class="blocks-container">
+            <!-- Loaded dynamically -->
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. Simulator Tab (All Users) -->
+      <section id="tab-simulator" class="tab-content">
+        <div class="card">
+          <h2 class="card-title">🔍 検索シミュレーター (Fast Retrieval)</h2>
+          <p class="card-desc">
+            ユーザーの質問に対して「どの文書のどの文面がヒットするか」を、LLMの回答生成を挟まずに1秒未満で直接テストします。修正した文面が意図通りに検索されるかの検証に最適です。
+          </p>
+
+          <div class="search-bar-flex">
+            <input type="text" id="sim-query-input" class="form-input" placeholder="検索キーワードまたは質問文を入力... (例: 交通費の上限)">
+            <button class="btn btn-primary" onclick="runSearchSimulator()">
+              <span>検索テスト実行</span> ⚡
+            </button>
+          </div>
+
+          <div id="sim-results" class="sim-results-area">
+            <p class="placeholder-text">検索ボタンを押すと、ヒットした文面と類似度スコアがここに表示されます。</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. Users & RBAC Management Tab (Admin Only) -->
+      <section id="tab-users" class="tab-content">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <h2 class="card-title">👥 社員アカウント＆権限ライフサイクル管理 (管理者専用)</h2>
+              <p class="card-desc">
+                入社時のアカウント発行、人事異動に伴う権限変更・パスワード再発行、休職・退社時の即時利用停止や完全抹消を安全かつ確実に実行します。
+              </p>
+            </div>
+            <button class="btn btn-primary" onclick="openNewUserModal()">
+              <span>＋ 新規社員アカウント登録</span> 🌸
+            </button>
+          </div>
+
+          <!-- 業務手順ガイドバナー (入社・異動・退社) -->
+          <div class="user-lifecycle-guide">
+            <div class="guide-card guide-join">
+              <div class="guide-icon">🌸</div>
+              <div class="guide-content">
+                <div class="guide-title">1. 入社時の手順</div>
+                <div class="guide-text" data-i18n-html="guide_join_html">
+                  「<strong>＋ 新規社員アカウント登録</strong>」をクリック。社員ID・氏名・部署・初期役職（Viewer推奨）を設定し、初期パスワードを発行します。完了後に発行される初期ログイン案内文をコピーして本人に通知します。
+                </div>
+              </div>
+            </div>
+            <div class="guide-card guide-transfer">
+              <div class="guide-icon">🔄</div>
+              <div class="guide-content">
+                <div class="guide-title">2. 異動・昇格時の手順</div>
+                <div class="guide-text" data-i18n-html="guide_transfer_html">
+                  対象社員の「<strong>✏️ 編集</strong>」から役職（Editorへの昇格など）や所属部署を即座に変更。パスワード忘れ時には「<strong>🔑 PWリセット</strong>」で安全に初期化できます。
+                </div>
+              </div>
+            </div>
+            <div class="guide-card guide-leave">
+              <div class="guide-icon">🛑</div>
+              <div class="guide-content">
+                <div class="guide-title">3. 休職・退社時の手順</div>
+                <div class="guide-text" data-i18n-html="guide_leave_html">
+                  「<strong>🛑 利用停止</strong>」を押すことで、過去の監査証跡を残したまま即座にログイン遮断＆セッションを強制切断します（推奨）。完全に抹消する場合は「<strong>🗑️ 削除</strong>」を実行します（自己削除・最終Admin保護機能付き）。
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- アカウント統計ダッシュボードカード -->
+          <div class="user-stats-grid">
+            <div class="stat-card">
+              <div class="stat-num" id="stat-total-users">-</div>
+              <div class="stat-label">📋 登録社員総数</div>
+            </div>
+            <div class="stat-card stat-success">
+              <div class="stat-num" id="stat-active-users">-</div>
+              <div class="stat-label">🟢 有効稼働アカウント</div>
+            </div>
+            <div class="stat-card stat-warning">
+              <div class="stat-num" id="stat-suspended-users">-</div>
+              <div class="stat-label">🔴 停止・休職中</div>
+            </div>
+            <div class="stat-card stat-purple">
+              <div class="stat-num" id="stat-admin-users">-</div>
+              <div class="stat-label">👑 システム管理者</div>
+            </div>
+          </div>
+
+          <!-- 検索・絞り込みツールバー -->
+          <div class="user-filter-toolbar">
+            <div class="filter-inputs">
+              <div class="search-input-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="user-search-query" class="form-input search-input" placeholder="社員名、ユーザーID、部署で検索..." oninput="handleUserSearchInput()">
+              </div>
+              <select id="user-filter-role" class="form-input filter-select" onchange="loadUsers()">
+                <option value="">すべての役職</option>
+                <option value="admin">システム管理者 (Admin)</option>
+                <option value="editor">ナレッジ編集長 (Editor)</option>
+                <option value="viewer">一般閲覧者 (Viewer)</option>
+              </select>
+              <select id="user-filter-status" class="form-input filter-select" onchange="loadUsers()">
+                <option value="">すべての状態</option>
+                <option value="active">🟢 有効のみ</option>
+                <option value="suspended">🔴 停止中のみ</option>
+              </select>
+              <button class="btn btn-secondary btn-sm" onclick="resetUserFilters()" title="検索条件をリセット">リセット</button>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="loadUsers()" title="最新の一覧を取得">最新に更新 🔄</button>
+          </div>
+
+          <!-- 社員一覧テーブル -->
+          <div class="table-container">
+            <table class="data-table" id="users-table">
+              <thead>
+                <tr>
+                  <th style="width: 140px;">ユーザーID</th>
+                  <th style="width: 150px;">社員名 (表示名)</th>
+                  <th style="width: 130px;">所属部署</th>
+                  <th style="width: 130px;">付与役職</th>
+                  <th style="width: 110px;">アカウント状態</th>
+                  <th>備考・メモ</th>
+                  <th style="width: 230px; text-align: right;">安全操作</th>
+                </tr>
+              </thead>
+              <tbody id="users-table-body">
+                <!-- Loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. Audit Trail & Diagnostics Tab (Admin Only) -->
+      <section id="tab-audit" class="tab-content">
+        <div class="card">
+          <div class="card-header-flex">
+            <div>
+              <h2 class="card-title">📜 操作監査ログ & システム診断</h2>
+              <p class="card-desc">
+                「誰が、いつ、どこから、どの操作を行ったか」の完全な監査証跡を記録・追跡します。システム障害時の詳細ログ・スタックトレースも確認できます。
+              </p>
+            </div>
+            <button class="btn btn-secondary" onclick="loadAuditLogs()">最新ログに更新 🔄</button>
+          </div>
+
+          <!-- Filter bar -->
+          <div class="filter-bar" style="margin-bottom: 16px;">
+            <input type="text" id="audit-filter-user" class="form-input" placeholder="ユーザーIDで絞り込み..." style="max-width:200px;">
+            <select id="audit-filter-action" class="form-input" style="max-width:200px;">
+              <option value="">すべての操作区分</option>
+              <option value="LOGIN">ログイン (LOGIN)</option>
+              <option value="LOGOUT">ログアウト (LOGOUT)</option>
+              <option value="CHAT_QUERY">チャット質問 (CHAT_QUERY)</option>
+              <option value="FILE_INGEST">ファイル取込 (FILE_INGEST)</option>
+              <option value="BLOCK_CREATE">文面追加 (BLOCK_CREATE)</option>
+              <option value="BLOCK_UPDATE">文面変更 (BLOCK_UPDATE)</option>
+              <option value="BLOCK_DELETE">文面削除 (BLOCK_DELETE)</option>
+              <option value="USER_CREATE">ユーザー作成 (USER_CREATE)</option>
+              <option value="USER_ROLE_UPDATE">役職変更 (USER_ROLE_UPDATE)</option>
+              <option value="SETTINGS_UPDATE">設定変更 (SETTINGS_UPDATE)</option>
+              <option value="RETENTION_UPDATE">保存期間変更 (RETENTION_UPDATE)</option>
+            </select>
+            <button class="btn btn-secondary" onclick="loadAuditLogs()">絞り込み検索 🔎</button>
+          </div>
+
+          <div class="table-container">
+            <table class="data-table" id="audit-table">
+              <thead>
+                <tr>
+                  <th>発生日時</th>
+                  <th>操作者</th>
+                  <th>役職</th>
+                  <th>操作区分</th>
+                  <th>対象リソース</th>
+                  <th>状態</th>
+                  <th>詳細要約 (サニタイズ済)</th>
+                  <th>IPアドレス</th>
+                </tr>
+              </thead>
+              <tbody id="audit-table-body">
+                <!-- Loaded dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Diagnostics Section -->
+          <div class="diagnostics-section" style="margin-top: 32px;">
+            <h3 class="sub-title">🛠️ システム障害・エラー診断ログ (スタックトレース記録)</h3>
+            <p class="card-desc">直近のシステム例外や内部エラーのスタックトレースおよびコンテキストを保持・表示します。</p>
+            <div id="diagnostics-container" class="diagnostics-container">
+              <p class="placeholder-text">システムエラーは現在記録されていません（正常稼働中）。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. Settings Tab (Admin Only) -->
+      <section id="tab-settings" class="tab-content">
+        <div class="card">
+          <h2 class="card-title">⚙️ 推論モデル & 保守設定 (管理者専用)</h2>
+          <p class="card-desc">
+            推論プロバイダの切り替え、APIキー管理、およびログ保存期間（最大1年）の調整を行います。
+          </p>
+
+          <!-- Inference Provider -->
+          <div class="settings-group">
+            <label class="form-label">アクティブ推論プロバイダ</label>
+            <div class="radio-cards">
+              <label class="radio-card">
+                <input type="radio" name="provider" value="litert" id="prov-litert" checked onchange="toggleProviderSettings()">
+                <div class="radio-card-body">
+                  <div class="radio-title">🍏 ローカル完全オフライン (LiteRT-LM)</div>
+                  <div class="radio-desc">Apple Silicon Metal GPUで高速動作。外部インターネット通信ゼロ（パケット漏洩リスク0%）。</div>
+                </div>
+              </label>
+              <label class="radio-card">
+                <input type="radio" name="provider" value="gemini" id="prov-gemini" onchange="toggleProviderSettings()">
+                <div class="radio-card-body">
+                  <div class="radio-title">☁️ クラウド最新モデル (Google Gemini API)</div>
+                  <div class="radio-desc">Google公式SDK（無料枠Gemini 3.5 Flash Lite専用）。高度な思考と高速回答。</div>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <div id="gemini-settings-panel" class="gemini-panel" style="display:none;">
+            <div class="form-group">
+              <label class="form-label" for="gemini-key">Google Gemini API Key</label>
+              <input type="password" id="gemini-key" class="form-input" placeholder="AIzaSy... (入力するとサーバー内でのみセキュア保持)">
+              <p class="input-hint" id="api-key-status">🔒 APIキーセキュリティ: サーバーメモリ保持（クライアント平文保存ゼロ・ログ自動サニタイズ）。</p>
+            </div>
+
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label class="form-label" for="gemini-model-select" style="margin-bottom: 0;">Geminiモデル選択</label>
+                <button type="button" class="btn btn-secondary btn-sm" id="btn-discover-models" onclick="discoverGeminiModels()">
+                  <span>🔄 公開中の利用可能モデル一覧を取得</span>
+                </button>
+              </div>
+              <select id="gemini-model-select" class="form-input">
+                <option value="gemini-3.5-flash-lite" selected>Gemini 3.5 Flash Lite (公式推奨・高速・無料枠対象)</option>
+              </select>
+              <p class="input-hint" id="model-discovery-status">※上の「公開中の利用可能モデル一覧を取得」ボタンを押すと、入力したAPIキーを用いてGoogle公式APIから現在公開されている最新モデルを直接探索・表記します。</p>
+            </div>
+
+            <!-- 公開使用可能なGeminiモデル一覧 表記エリア -->
+            <div id="discovered-models-section" style="margin-top: 18px; padding-top: 14px; border-top: 1px dashed var(--border); display: none;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <h4 style="font-size: 13.5px; font-weight: 700; color: var(--text-main); margin: 0;">
+                  📋 実際に公開・使用可能なGeminiモデル一覧 (<span id="discovered-count">0</span>件検出)
+                </h4>
+                <span id="discovered-badge" style="font-size: 11.5px; color: var(--success); font-weight: 600;"></span>
+              </div>
+              <div id="discovered-models-list" class="discovered-models-list">
+                <!-- 動的生成 -->
+              </div>
+            </div>
+          </div>
+
+          <div class="divider" style="margin: 24px 0; border-top: 1px solid var(--border);"></div>
+
+          <!-- Log Retention Settings -->
+          <div class="settings-group">
+            <h3 class="sub-title">📅 ログ保存期間設定 (監査・保守ポリシー)</h3>
+            <p class="card-desc">
+              社内規程・法令遵守ポリシーに基づき、操作監査ログおよびシステム診断ログの保持期間を設定します。期限を過ぎたログは自動的にクリーンアップされます。
+            </p>
+            <div class="form-group" style="max-width: 320px;">
+              <label class="form-label" for="retention-select">ログ保持期間:</label>
+              <select id="retention-select" class="form-input">
+                <option value="7">7日間（短縮・開発用）</option>
+                <option value="30">30日間（1ヶ月）</option>
+                <option value="90">90日間（3ヶ月・四半期）</option>
+                <option value="180">180日間（半年）</option>
+                <option value="365" selected>365日間（1年間・推奨上限）</option>
+              </select>
+            </div>
+          </div>
+
+          <button class="btn btn-primary" onclick="saveAllSettings()">
+            <span>すべての設定を保存して反映</span> 💾
+          </button>
+        </div>
+
+        <!-- 8. Model Context Protocol (MCP) Server Integration Panel -->
+        <div class="card" style="margin-top: 24px; border-left: 4px solid #10b981;">
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px;">
+            <div>
+              <h2 class="card-title" style="display: flex; align-items: center; gap: 8px;">
+                <span>🔌 外部AI連携 MCP サーバー (Model Context Protocol)</span>
+                <span class="user-role-badge" style="background:#ecfdf5; color:#059669; border:1px solid #a7f3d0;">JSON-RPC 2.0 稼働中</span>
+              </h2>
+              <p class="card-desc" data-i18n-html="mcp_desc_html">
+                本社内ナレッジポータルは、Anthropic社提唱の業界標準プロトコル <strong>Model Context Protocol (MCP)</strong> サーバーをネイティブ標準搭載しています。Claude Desktop や Cursor、自律コーディングエージェント等の外部AIツールから、社内ナレッジ（ベクトル検索・条文取得）を外部ツールとしてシームレスに直接呼び出すことができます。
+              </p>
+            </div>
+            <button class="btn btn-secondary" id="btn-test-mcp" onclick="testMCPEndpoint()">
+              <span>⚡ MCP 疎通テスト実行</span>
+            </button>
+          </div>
+
+          <div class="stats-grid" style="margin-top: 14px; margin-bottom: 16px;">
+            <div class="stat-card">
+              <div class="stat-label">MCP エンドポイント URL</div>
+              <div class="stat-value" style="font-size: 14px; font-family: monospace; color: var(--primary);" id="mcp-endpoint-url">
+                http://127.0.0.1:8000/mcp
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">プロトコル仕様</div>
+              <div class="stat-value" style="font-size: 15px; color: var(--text-main);">
+                JSON-RPC 2.0 (POST)
+              </div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">公開ツール一覧</div>
+              <div class="stat-value" style="font-size: 13.5px; color: var(--text-main);">
+                <code>search_knowledge</code>, <code>get_knowledge_block</code>
+              </div>
+            </div>
+          </div>
+
+          <h3 class="sub-title" style="font-size: 14px; margin-top: 16px; margin-bottom: 8px;">📋 Claude Desktop / Cursor 接続設定スニペット:</h3>
+          <p class="card-desc" style="margin-bottom: 8px;" data-i18n-html="mcp_cfg_html">
+            <code>claude_desktop_config.json</code> に以下の設定を追加すると、Claude から直接本社内ナレッジを検索・参照できるようになります:
+          </p>
+          <div style="position: relative;">
+            <pre id="mcp-config-snippet" style="background:#1e293b; color:#e2e8f0; padding: 14px; border-radius: 6px; font-size: 12px; overflow-x: auto; line-height: 1.5;">{
+  "mcpServers": {
+    "gemmacore_knowledge": {
+      "command": "curl",
+      "args": [
+        "-s",
+        "-X", "POST",
+        "http://127.0.0.1:8000/mcp",
+        "-H", "Content-Type: application/json"
+      ]
+    }
+  }
+}</pre>
+            <button class="btn btn-xs btn-outline" style="position: absolute; top: 10px; right: 10px; background: rgba(255,255,255,0.9);" onclick="copyMCPConfigSnippet()">
+              📋 コピー
+            </button>
+          </div>
+
+          <div id="mcp-test-result" style="display:none; margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid var(--border); border-radius: 6px;">
+            <div style="font-weight: 700; font-size: 13px; margin-bottom: 6px;" id="mcp-test-status"></div>
+            <pre id="mcp-test-output" style="font-size: 11.5px; font-family: monospace; max-height: 160px; overflow-y: auto; background: #fff; padding: 8px; border-radius: 4px; border: 1px solid #e2e8f0;"></pre>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Modal for New Block -->
+    <div id="modal-block" class="modal-overlay" style="display:none;">
+      <div class="modal-box">
+        <h3 class="modal-title">新規ナレッジ文面の追加</h3>
+        <div class="form-group">
+          <label class="form-label">ドキュメント名（所属資料名）</label>
+          <input type="text" id="modal-doc-title" class="form-input" placeholder="例: 就業規則">
+        </div>
+        <div class="form-group">
+          <label class="form-label">見出し・条文番号 (Locator)</label>
+          <input type="text" id="modal-locator" class="form-input" placeholder="例: 第5条 慶弔休暇の規定">
+        </div>
+        <div class="form-group">
+          <label class="form-label">文面本文</label>
+          <textarea id="modal-text" class="form-input" rows="5" placeholder="社内ルールや文面を入力してください..."></textarea>
+        </div>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="closeNewBlockModal()">キャンセル</button>
+          <button class="btn btn-success" onclick="saveNewBlock()">追加してインデックス 🚀</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 1: New User Registration (Join) -->
+    <div id="modal-user" class="modal-overlay" style="display:none;">
+      <div class="modal-box">
+        <h3 class="modal-title">🌸 新規社員アカウントの発行・登録 (入社手続き)</h3>
+        <p class="card-desc" style="margin-bottom: 14px;">
+          新入社員の基本情報、所属部署、初期権限を設定します。登録完了後、本人配布用の初期ログイン案内文が自動生成されます。
+        </p>
+        <div class="form-group">
+          <label class="form-label">ユーザーID（半角英数字・記号 _ - .） <span class="required-badge">*必須</span></label>
+          <input type="text" id="modal-user-id" class="form-input" placeholder="例: yamada_t または t.yamada">
+          <p class="input-hint">※ログイン時に使用するIDです。登録後の変更はできません。</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">社員名（表示名） <span class="required-badge">*必須</span></label>
+          <input type="text" id="modal-user-name" class="form-input" placeholder="例: Taro Yamada">
+        </div>
+        <div class="form-group">
+          <label class="form-label">所属部署 <span class="required-badge">*必須</span></label>
+          <input type="text" id="modal-user-dept" class="form-input" placeholder="例: 営業本部 第一営業課">
+        </div>
+        <div class="form-group">
+          <label class="form-label">初期パスワード <span class="required-badge">*必須</span></label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="modal-user-pw" class="form-input" value="password123" style="font-family: monospace;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="generateRandomPassword('modal-user-pw')">🎲 ランダム生成</button>
+          </div>
+          <p class="input-hint">※社員へ通知する仮パスワードです（6文字以上）。</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">初期役職・権限（ロール） <span class="required-badge">*必須</span></label>
+          <select id="modal-user-role" class="form-input">
+            <option value="viewer" selected>一般閲覧者 (Viewer - チャット対話・資料検索のみ / 推奨)</option>
+            <option value="editor">ナレッジ編集長 (Editor - 社内資料の登録・文面編集・削除)</option>
+            <option value="admin">システム管理者 (Admin - 全機能・モデル設定・社員管理)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考・社内メモ (任意)</label>
+          <input type="text" id="modal-user-notes" class="form-input" placeholder="例: 2026年10月中途入社、PC配備済み">
+        </div>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="closeNewUserModal()">キャンセル</button>
+          <button class="btn btn-primary" onclick="saveNewUser()">アカウントを発行して登録 🌸</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 2: Welcome & Account Credentials Distribution Guide -->
+    <div id="modal-user-welcome" class="modal-overlay" style="display:none;">
+      <div class="modal-box">
+        <h3 class="modal-title">🎉 社員アカウントの発行が完了しました</h3>
+        <p class="card-desc" style="margin-bottom: 12px;">
+          以下の案内文をコピーし、新入社員へメールまたは社内チャット等で通知してください。
+        </p>
+        <div class="form-group">
+          <textarea id="modal-welcome-text" class="form-input" rows="8" readonly style="font-family: monospace; font-size: 13px; background: #f8fafc;"></textarea>
+        </div>
+        <div class="modal-buttons" style="justify-content: space-between;">
+          <button class="btn btn-secondary" onclick="closeWelcomeModal()">閉じる</button>
+          <button class="btn btn-primary" onclick="copyWelcomeText()">
+            <span>📋 案内文をコピー</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 3: Edit User Details & Role (Transfer / Promotion) -->
+    <div id="modal-user-edit" class="modal-overlay" style="display:none;">
+      <div class="modal-box">
+        <h3 class="modal-title">✏️ 社員情報＆付与役職の変更 (人事異動・昇格)</h3>
+        <input type="hidden" id="edit-user-id">
+        <div class="form-group">
+          <label class="form-label">ユーザーID</label>
+          <input type="text" id="edit-user-id-display" class="form-input" disabled style="background:#f1f5f9; font-weight:700;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">社員名（表示名） <span class="required-badge">*必須</span></label>
+          <input type="text" id="edit-user-name" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">所属部署 <span class="required-badge">*必須</span></label>
+          <input type="text" id="edit-user-dept" class="form-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">付与役職・権限（ロール） <span class="required-badge">*必須</span></label>
+          <select id="edit-user-role" class="form-input" onchange="checkRoleChangeWarning()">
+            <option value="viewer">一般閲覧者 (Viewer - チャット対話・検索のみ)</option>
+            <option value="editor">ナレッジ編集長 (Editor - 資料登録・文面編集)</option>
+            <option value="admin">システム管理者 (Admin - 全機能・モデル保守・社員管理)</option>
+          </select>
+          <div id="edit-role-warning" class="alert-box alert-warning" style="display:none; margin-top:8px;">
+            ⚠️ 注意: システム管理者（Admin）権限を付与すると、全システム設定や他社員の管理・削除が可能になります。
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">備考・社内メモ</label>
+          <input type="text" id="edit-user-notes" class="form-input">
+        </div>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="closeEditUserModal()">キャンセル</button>
+          <button class="btn btn-primary" onclick="submitEditUser()">変更内容を保存 💾</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 4: Password Reset -->
+    <div id="modal-user-reset-pw" class="modal-overlay" style="display:none;">
+      <div class="modal-box">
+        <h3 class="modal-title">🔑 パスワードの再発行・リセット</h3>
+        <p class="card-desc">
+          対象社員: <strong id="reset-pw-user-name">-</strong> (<span id="reset-pw-user-id">-</span>)
+        </p>
+        <div class="form-group">
+          <label class="form-label">新しいパスワード (6文字以上) <span class="required-badge">*必須</span></label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="reset-pw-input" class="form-input" placeholder="新しいパスワードを入力" style="font-family: monospace;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="generateRandomPassword('reset-pw-input')">🎲 ランダム生成</button>
+          </div>
+          <p class="input-hint">※再発行したパスワードを本人へ安全に伝達してください。</p>
+        </div>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="closeResetPwModal()">キャンセル</button>
+          <button class="btn btn-primary" onclick="submitResetPassword()">パスワードを更新 🔑</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 5: Suspend / Reactivate Confirmation -->
+    <div id="modal-user-suspend" class="modal-overlay" style="display:none;">
+      <div class="modal-box">
+        <h3 class="modal-title" id="suspend-modal-title">アカウント状態の変更</h3>
+        <p class="card-desc" id="suspend-modal-desc">
+          対象社員: <strong id="suspend-user-name">-</strong> (<span id="suspend-user-id">-</span>)
+        </p>
+        <div id="suspend-warning-box" class="alert-box alert-danger" style="margin-bottom: 16px;">
+          🛑 <strong>即時アクセス遮断:</strong> アカウントを利用停止にすると、本人によるログインが即座に拒絶され、現在接続中のセッションも強制切断されます（過去の監査ログは保持されます）。
+        </div>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="closeSuspendModal()">キャンセル</button>
+          <button class="btn btn-danger" id="btn-confirm-suspend" onclick="submitToggleStatus()">停止を実行する</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 6: Strict Safety Delete (Input Confirmation Safety Lock) -->
+    <div id="modal-user-delete" class="modal-overlay" style="display:none;">
+      <div class="modal-box">
+        <h3 class="modal-title" style="color: var(--danger);">🗑️ 社員アカウントの完全削除 (完全抹消)</h3>
+        <div class="alert-box alert-danger" style="margin-bottom: 14px;">
+          ⚠️ <strong>警告: この操作は元に戻せません。</strong><br>
+          対象社員: <strong id="delete-user-name">-</strong> (ID: <code id="delete-user-id">-</code>)<br>
+          ※休職や一時的な離脱の場合は「利用停止」のご利用を強く推奨します。
+        </div>
+        <p class="form-label" style="font-size: 13px;">
+          誤操作・誤クリック防止のため、削除対象のユーザーID「<strong id="delete-target-id-label" style="color:var(--danger);">-</strong>」を正確に入力してください:
+        </p>
+        <div class="form-group">
+          <input type="text" id="delete-confirm-input" class="form-input" placeholder="ユーザーIDを入力して確認..." oninput="handleDeleteConfirmInput()">
+        </div>
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="closeDeleteUserModal()">キャンセル</button>
+          <button class="btn btn-danger" id="btn-execute-delete" onclick="submitDeleteUser()" disabled>
+            完全削除を実行 🗑️
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal 8: Google Drive Target Folders Configuration -->
+    <div id="modal-drive-folders" class="modal-overlay" style="display:none;">
+      <div class="modal-box" style="max-width: 620px;">
+        <h3 class="modal-title">⚙️ Google Drive 同期対象フォルダ・アクセス権限設定</h3>
+        <p class="card-desc">
+          社内Google Drive上のどの共有ドライブ・フォルダを知識ベースに取り込むかを指定します。各フォルダごとに閲覧可能役職（権限ACL）を設定できます。
+        </p>
+
+        <div id="drive-folders-list" style="margin-bottom: 16px;">
+          <!-- Dynamically populated folder rows -->
+        </div>
+
+        <div class="card" style="background: var(--bg-hover); padding: 14px; margin-bottom: 16px;">
+          <h4 style="font-size:13px; font-weight:700; margin-bottom: 8px;">＋ 新しい同期フォルダを追加:</h4>
+          <div class="drive-add-grid" style="display: grid; grid-template-columns: 1fr 1fr 110px auto; gap: 8px; align-items: center;">
+            <input type="text" id="new-folder-name" class="form-input" placeholder="フォルダ表示名 (例: 全社公式規程)">
+            <input type="text" id="new-folder-id" class="form-input" placeholder="Drive フォルダID">
+            <select id="new-folder-role" class="form-input">
+              <option value="viewer">Viewer以上</option>
+              <option value="editor">Editor以上</option>
+              <option value="admin">Admin限定</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="addNewFolderRow()">追加</button>
+          </div>
+        </div>
+
+        <div class="modal-buttons">
+          <button class="btn btn-secondary" onclick="closeDriveFolderModal()">キャンセル</button>
+          <button class="btn btn-primary" onclick="saveDriveFolders()">設定を保存 💾</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 7: Google Workspace SSO Login Dialog (Global Level, available before & after login) -->
+  <div id="modal-google-sso" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <h3 class="modal-title" style="display: flex; align-items: center; gap: 8px;">
+        <svg viewBox="0 0 24 24" width="20" height="20">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        <span>Google Workspace アカウントでログイン</span>
+      </h3>
+      <p class="card-desc">
+        社内Googleアカウントを選択して認証します。未登録の社員は自動的に「一般ユーザー（Viewer権限）」として初期登録されます。
+      </p>
+
+      <div class="demo-accounts-box" style="margin-bottom: 16px;">
+        <div class="demo-title">💡 社内Googleアカウント（クリックでワンクリックSSO）:</div>
+        <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+          <button class="btn btn-outline" style="text-align: left; padding: 10px 14px;" onclick="simulateGoogleLogin('sato_g@example.com', 'Kenta Sato (営業部)')">
+            👤 <strong>Kenta Sato</strong> &lt;sato_g@example.com&gt;（既存営業社員）
+          </button>
+          <button class="btn btn-outline" style="text-align: left; padding: 10px 14px;" onclick="simulateGoogleLogin('yamamoto_new@example.com', 'Hanako Yamamoto (新入社員)')">
+            ✨ <strong>Hanako Yamamoto</strong> &lt;yamamoto_new@example.com&gt;（初ログイン・JIT自動プロビジョニング）
+          </button>
+          <button class="btn btn-outline" style="text-align: left; padding: 10px 14px;" onclick="simulateGoogleLogin('admin_cloud@example.com', 'Ichiro Suzuki (情シス統括)')">
+            👑 <strong>Ichiro Suzuki</strong> &lt;admin_cloud@example.com&gt;（システム管理者）
+          </button>
+        </div>
+      </div>
+
+      <div class="form-group" style="text-align: left;">
+        <label class="form-label">または Google IDトークンを手動入力</label>
+        <textarea id="google-id-token-input" class="form-input" rows="2" placeholder="eyJhbGciOiJSUzI1NiIs..."></textarea>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" onclick="closeGoogleSSOModal()">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitGoogleTokenLogin()">トークンでログイン 🚀</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="i18n_phrases.js"></script>
+  <script src="i18n_phrases_backend.js"></script>
+  <script src="i18n.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

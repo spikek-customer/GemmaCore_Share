@@ -1,0 +1,8 @@
+# LiteRT-LM & GemmaCore Mac Dependencies
+litert-lm-api
+litert-lm
+qdrant-client
+google-genai
+pillow
+pytest
+pytest-mock
