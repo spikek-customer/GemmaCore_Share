@@ -25,6 +25,16 @@ Office全般 (Word/Excel/PowerPoint)・PDF・CSVの万能取込、Google Workspa
 ### 1. 環境構築
 
 ```bash
+# スクリプトによる自動環境構築 (Python 3.12 + 依存パッケージ + デフォルトモデル: Gemma 4 12B 4bit)
+./scripts/setup_env.sh
+
+# ※モデルダウンロード(~7.6GB)を後回しにし、Cloud Gemini / モック推論優先で起動する場合:
+# SKIP_MODEL_DOWNLOAD=1 ./scripts/setup_env.sh
+```
+
+手動で環境を構築する場合は以下の通りです：
+
+```bash
 # 仮想環境の作成と有効化 (macOS / Python 3.12 推奨)
 python3 -m venv litert-env
 source litert-env/bin/activate
